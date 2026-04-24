@@ -49,7 +49,7 @@
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
           <OutputDirectory>.\Objects\</OutputDirectory>
-          <OutputName>MecanumCar</OutputName>
+          <OutputName>c8t6_control_mecanum</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
           <CreateHexFile>1</CreateHexFile>
@@ -413,6 +413,16 @@
               <FileName>gpio.c</FileName>
               <FileType>1</FileType>
               <FilePath>Drivers\gpio.c</FilePath>
+            </File>
+            <File>
+              <FileName>led.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>Drivers\led.c</FilePath>
+            </File>
+            <File>
+              <FileName>oled.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>Drivers\oled.c</FilePath>
             </File>
             <File>
               <FileName>systick.c</FileName>

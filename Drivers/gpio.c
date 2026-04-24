@@ -3,6 +3,13 @@
 void gpio_clock_enable(void) {
     RCC->APB2ENR |= RCC_APB2ENR_AFIOEN | RCC_APB2ENR_IOPAEN |
                     RCC_APB2ENR_IOPBEN | RCC_APB2ENR_IOPCEN;
+
+    /*
+     * 关闭 JTAG、保留 SWD。
+     * 这样 PA13/PA14 仍可用 ST-Link 下载调试，同时释放 PA15/PB3/PB4。
+     * 本工程 PA15 用作后左电机方向脚，PB4 用作后右电机方向脚。
+     */
+    AFIO->MAPR = (AFIO->MAPR & ~AFIO_MAPR_SWJ_CFG_MASK) | AFIO_MAPR_SWJ_CFG_NOJTAG;
 }
 
 void gpio_config(GPIO_TypeDef *port, uint8_t pin, uint8_t mode, uint8_t cnf) {

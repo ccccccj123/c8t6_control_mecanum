@@ -9,6 +9,15 @@
 static PIDController wheel_pid[MOTOR_COUNT];
 static uint8_t enabled;
 static int16_t speed_limit = SPEED_LIMIT_TICKS;
+static ControlStatus status;
+
+static void clear_status_values(void) {
+    for (uint8_t i = 0U; i < MOTOR_COUNT; i++) {
+        status.target[i] = 0;
+        status.measured[i] = 0;
+        status.output[i] = 0;
+    }
+}
 
 /*
  * 将 PS2 摇杆 0-255 原始值转换为带符号速度命令。
@@ -31,6 +40,10 @@ void control_init(void) {
                  PID_OUTPUT_LIMIT, PID_INTEGRAL_LIMIT);
     }
     enabled = 0U;
+    status.ps2_connected = 0U;
+    status.motor_enabled = 0U;
+    clear_status_values();
+    encoder_reset();
 }
 
 void control_update_10ms(void) {
@@ -43,8 +56,13 @@ void control_update_10ms(void) {
     if (ps2_read(&ps2) == 0U) {
         tb6612_stop_all();
         enabled = 0U;
+        status.ps2_connected = 0U;
+        status.motor_enabled = 0U;
+        clear_status_values();
+        encoder_reset();
         return;
     }
+    status.ps2_connected = 1U;
 
     /* START 使能，SELECT 停车；这是调车时的基础安全开关。 */
     if (ps2_button_down(&ps2, PS2_BTN_START) != 0U) {
@@ -73,12 +91,19 @@ void control_update_10ms(void) {
         axis_to_command(ps2.ly, speed_limit, 1U),
         axis_to_command(ps2.rx, speed_limit, 0U),
         speed_limit);
+    status.target[MOTOR_FRONT_LEFT] = target.front_left;
+    status.target[MOTOR_FRONT_RIGHT] = target.front_right;
+    status.target[MOTOR_REAR_LEFT] = target.rear_left;
+    status.target[MOTOR_REAR_RIGHT] = target.rear_right;
 
     /* 读取每个控制周期内的编码器增量，作为实际轮速反馈。 */
     measured[MOTOR_FRONT_LEFT] = encoder_read_delta(MOTOR_FRONT_LEFT);
     measured[MOTOR_FRONT_RIGHT] = encoder_read_delta(MOTOR_FRONT_RIGHT);
     measured[MOTOR_REAR_LEFT] = encoder_read_delta(MOTOR_REAR_LEFT);
     measured[MOTOR_REAR_RIGHT] = encoder_read_delta(MOTOR_REAR_RIGHT);
+    for (uint8_t i = 0U; i < MOTOR_COUNT; i++) {
+        status.measured[i] = measured[i];
+    }
 
     /*
      * 即使未使能，也仍然读取了一次编码器增量。
@@ -86,8 +111,10 @@ void control_update_10ms(void) {
      */
     if (enabled == 0U) {
         tb6612_stop_all();
+        status.motor_enabled = 0U;
         return;
     }
+    status.motor_enabled = 1U;
 
     /*
      * 每个轮子独立闭环。
@@ -111,4 +138,11 @@ void control_update_10ms(void) {
     tb6612_set_motor(MOTOR_FRONT_RIGHT, output[MOTOR_FRONT_RIGHT]);
     tb6612_set_motor(MOTOR_REAR_LEFT, output[MOTOR_REAR_LEFT]);
     tb6612_set_motor(MOTOR_REAR_RIGHT, output[MOTOR_REAR_RIGHT]);
+    for (uint8_t i = 0U; i < MOTOR_COUNT; i++) {
+        status.output[i] = output[i];
+    }
+}
+
+const ControlStatus *control_get_status(void) {
+    return &status;
 }

@@ -2,7 +2,7 @@
 
 > 这份计划记录本工程的实现步骤，后续如果要重构或迁移到别的开发板，可以按这里快速理解工程结构。
 
-**目标：** 构建一个 STM32F103C8T6 麦轮小车 Keil 工程，支持 TB6612 电机驱动、PS2 手柄遥控、四轮编码器速度闭环和麦轮全向移动。
+**目标：** 构建一个 STM32F103C8T6 麦轮小车 Keil 工程，支持网上常见 TB6612 四路电机驱动模块、PS2 手柄遥控、520 霍尔编码器电机四轮速度闭环和麦轮全向移动。
 
 **架构：** 工程采用裸机寄存器方式，不依赖 HAL/SPL。核心算法与硬件驱动分离，麦轮运动学和 PID 可以在电脑上单独测试，STM32 外设初始化集中在 `Drivers/` 和 `Core/`。
 
@@ -12,14 +12,16 @@
 
 ## 文件结构
 
-- `MecanumCar.uvprojx`：Keil 主工程文件。
-- `MecanumCar.uvoptx`：Keil 工程选项文件。
+- `c8t6_control_mecanum.uvprojx`：Keil 主工程文件。
+- `c8t6_control_mecanum.uvoptx`：Keil 工程选项文件。
 - `Startup/startup_stm32f103c8tx.s`：启动文件、中断向量表、复位入口。
 - `Core/stm32f103xb.h`：本工程需要的 STM32F103 最小寄存器定义。
 - `Core/system_stm32f10x.c`：72MHz 系统时钟初始化。
 - `Core/config.h`：速度、PWM、PID、手柄死区等调试参数。
 - `Core/main.c`：初始化顺序和 10ms 主控制循环调度。
 - `Drivers/gpio.*`：GPIO 时钟、模式配置、读写封装。
+- `Drivers/led.*`：PC13 板载 LED 闪烁，用于最小系统板基础测试。
+- `Drivers/oled.*`：PB8/PB9 软件 I2C SSD1306 OLED 调试显示。
 - `Drivers/pwm.*`：TIM1 四路 20kHz PWM。
 - `Drivers/tb6612.*`：TB6612 方向控制和带符号 PWM 输出。
 - `Drivers/encoder.*`：三路硬件编码器和一路 EXTI 软件编码器。
@@ -50,6 +52,8 @@
 ### 任务 3：硬件驱动
 
 - GPIO：支持输入、普通输出、复用推挽输出。
+- LED：PC13 板载 LED 作为心跳灯，上电后 500ms 闪烁。
+- OLED：PB8/PB9 软件 I2C，显示 PS2 状态、使能状态和四轮编码器增量。
 - PWM：使用 TIM1 CH1-CH4 输出 `PA8-PA11` 四路 20kHz PWM。
 - TB6612：按四个轮子的引脚表输出方向和占空比。
 - 编码器：TIM2/TIM3/TIM4 三路硬件编码器，PA4/PA5 一路 EXTI 软件正交解码。
@@ -64,6 +68,7 @@
 - 四路编码器读取实际速度。
 - 四个 PID 独立闭环。
 - `START` 使能，`SELECT` 停车，`L1` 慢速。
+- 520 电机按 11PPR、30 减速比、四倍频计数估算，默认速度限幅设置为 35/18 count per 10ms。
 
 ### 任务 5：Keil 工程和文档
 

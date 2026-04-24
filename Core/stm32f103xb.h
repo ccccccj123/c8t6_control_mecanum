@@ -135,6 +135,10 @@ typedef struct {
 #define RCC_APB1ENR_TIM3EN        (1UL << 1)
 #define RCC_APB1ENR_TIM4EN        (1UL << 2)
 
+/* AFIO_MAPR[26:24] = 010：关闭 JTAG，保留 SWD，这样 PB3/PB4/PA15 可作普通 GPIO。 */
+#define AFIO_MAPR_SWJ_CFG_MASK    (7UL << 24)
+#define AFIO_MAPR_SWJ_CFG_NOJTAG  (2UL << 24)
+
 /* GPIO MODE/CNF 组合值，供 gpio_config() 使用。 */
 #define GPIO_MODE_INPUT           0x0U
 #define GPIO_MODE_OUTPUT_2MHZ     0x2U

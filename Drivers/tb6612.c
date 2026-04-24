@@ -19,8 +19,8 @@ static const MotorPinMap motor_pins[MOTOR_COUNT] = {
     {GPIOB, 10, GPIOB, 11, 2},
     /* 后左：PA10 PWM, PA12/PA15 方向，对应 TB6612 #2 A 通道。 */
     {GPIOA, 12, GPIOA, 15, 3},
-    /* 后右：PA11 PWM, PC13/PC14 方向，对应 TB6612 #2 B 通道。 */
-    {GPIOC, 13, GPIOC, 14, 4},
+    /* 后右：PA11 PWM, PB4/PB5 方向，对应 TB6612 #2 B 通道。PC13 留给板载 LED。 */
+    {GPIOB, 4, GPIOB, 5, 4},
 };
 
 static uint16_t magnitude(int16_t value) {

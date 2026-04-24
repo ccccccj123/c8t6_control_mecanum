@@ -93,7 +93,8 @@ void encoder_init(void) {
     /*
      * PA4/PA5 做后右轮软件解码。
      * 两相都开上升沿和下降沿中断，达到软件四倍频计数。
-     * 370 霍尔电机编码器频率通常不高，C8T6 在 72MHz 下处理一路 EXTI 足够。
+     * 520 霍尔减速电机在当前 11PPR、30 减速比下，编码器频率不算高。
+     * C8T6 在 72MHz 下只处理一路 EXTI 软件解码是够用的。
      */
     rr_last_state = rr_state();
     AFIO->EXTICR[1] &= ~((0xFUL << 0) | (0xFUL << 4));
@@ -101,6 +102,20 @@ void encoder_init(void) {
     EXTI->RTSR |= (1UL << 4) | (1UL << 5);
     EXTI->FTSR |= (1UL << 4) | (1UL << 5);
     NVIC_ISER0 = (1UL << EXTI4_IRQn) | (1UL << EXTI9_5_IRQn);
+
+    /*
+     * 刚初始化完定时器/EXTI 后，立即建立一次速度计算基准。
+     * 这样 OLED 第一帧和 PID 第一帧不会把初始化前后的随机计数当成有效速度。
+     */
+    encoder_reset();
+}
+
+void encoder_reset(void) {
+    last_timer_count[0] = (int16_t)TIM2->CNT;
+    last_timer_count[1] = (int16_t)TIM3->CNT;
+    last_timer_count[2] = (int16_t)TIM4->CNT;
+    rr_count = 0;
+    rr_last_state = rr_state();
 }
 
 int16_t encoder_read_delta(MotorId motor) {
