@@ -1,0 +1,6 @@
+.superpowers/
+*.exe
+Objects/
+Listings/
+*.uvguix.*
+*.uvoptx.bak
