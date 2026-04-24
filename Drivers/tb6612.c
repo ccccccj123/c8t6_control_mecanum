@@ -4,6 +4,7 @@
 #include "config.h"
 
 typedef struct {
+    /* 每个电机对应两个方向引脚和一个 TIM1 PWM 通道。 */
     GPIO_TypeDef *in1_port;
     uint8_t in1_pin;
     GPIO_TypeDef *in2_port;
@@ -12,9 +13,13 @@ typedef struct {
 } MotorPinMap;
 
 static const MotorPinMap motor_pins[MOTOR_COUNT] = {
+    /* 前左：PA8 PWM, PB0/PB1 方向，对应 TB6612 #1 A 通道。 */
     {GPIOB, 0, GPIOB, 1, 1},
+    /* 前右：PA9 PWM, PB10/PB11 方向，对应 TB6612 #1 B 通道。 */
     {GPIOB, 10, GPIOB, 11, 2},
+    /* 后左：PA10 PWM, PA12/PA15 方向，对应 TB6612 #2 A 通道。 */
     {GPIOA, 12, GPIOA, 15, 3},
+    /* 后右：PA11 PWM, PC13/PC14 方向，对应 TB6612 #2 B 通道。 */
     {GPIOC, 13, GPIOC, 14, 4},
 };
 
@@ -52,6 +57,11 @@ void tb6612_set_motor(MotorId motor, int16_t command) {
         duty = PWM_MAX_DUTY;
     }
 
+    /*
+     * TB6612 方向表：
+     * IN1=1, IN2=0 正转；IN1=0, IN2=1 反转；IN1=0, IN2=0 滑行停止。
+     * 若实车某轮方向反了，可以先对调电机线，或在这里交换该轮 IN1/IN2。
+     */
     if (command > 0) {
         gpio_write(pins->in1_port, pins->in1_pin, 1U);
         gpio_write(pins->in2_port, pins->in2_pin, 0U);

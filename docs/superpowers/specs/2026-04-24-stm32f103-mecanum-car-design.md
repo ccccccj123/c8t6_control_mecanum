@@ -1,67 +1,86 @@
-# STM32F103C8T6 Mecanum Car Keil Project Design
+# STM32F103C8T6 麦轮小车 Keil 工程设计说明
 
-## Goal
+## 目标
 
-Create a Keil uVision project for an STM32F103C8T6 minimum system board driving a four-wheel mecanum car with two TB6612 motor drivers, four Hall 370 geared motors, encoder speed closed-loop control, and PS2 controller remote control. The car has no gyroscope, so motion control is open-loop in chassis heading and closed-loop only in wheel speed.
+创建一个可在 Keil uVision 中打开和编译的 STM32F103C8T6 工程，用于驱动四轮麦轮小车。硬件包括：
 
-## Hardware Pin Map
+- STM32F103C8T6 最小系统板
+- 两块 TB6612 电机驱动
+- 四个轮趣霍尔 370 电机
+- PS2 手柄和接收器
 
-Available board pins are PB0-PB15, PA0-PA12, PA15, PC13-PC15, 5V, two 3V3 pins, three GND pins, VB, and R. PA13 and PA14 are reserved for SWD download/debug.
+小车没有陀螺仪，因此控制目标是“轮速闭环 + 车体坐标系运动”，不做航向保持，也不做场地坐标系全向控制。
 
-### PS2 Receiver
+## 引脚设计
 
-| Signal | STM32 Pin |
+开发板可用引脚为 `PB0-PB15`、`PA0-PA12`、`PA15`、`PC13-PC15`、`5V`、两个 `3V3`、三个 `GND`、`VB` 和 `R`。`PA13`、`PA14` 保留给 ST-Link 下载调试。
+
+### PS2 接收器
+
+| 信号 | STM32 引脚 |
 | --- | --- |
-| ATT / CS | PB12 |
-| CLK | PB13 |
-| DAT | PB14 |
-| CMD | PB15 |
-| VCC | 3V3 |
-| GND | GND |
+| `ATT` / `CS` | `PB12` |
+| `CLK` | `PB13` |
+| `DAT` | `PB14` |
+| `CMD` | `PB15` |
+| `VCC` | `3V3` |
+| `GND` | `GND` |
 
-### TB6612 Motor Control
+### TB6612 电机控制
 
-| Wheel | PWM | IN1 | IN2 | Driver Channel |
+| 轮子 | PWM | IN1 | IN2 | 驱动通道 |
 | --- | --- | --- | --- | --- |
-| Front-left | PA8 | PB0 | PB1 | TB6612 #1 A |
-| Front-right | PA9 | PB10 | PB11 | TB6612 #1 B |
-| Rear-left | PA10 | PA12 | PA15 | TB6612 #2 A |
-| Rear-right | PA11 | PC13 | PC14 | TB6612 #2 B |
+| 前左轮 | `PA8` | `PB0` | `PB1` | TB6612 #1 A |
+| 前右轮 | `PA9` | `PB10` | `PB11` | TB6612 #1 B |
+| 后左轮 | `PA10` | `PA12` | `PA15` | TB6612 #2 A |
+| 后右轮 | `PA11` | `PC13` | `PC14` | TB6612 #2 B |
 
-Both TB6612 STBY pins connect to PB2. TB6612 VM connects to the motor battery or VB, TB6612 logic VCC connects to 3V3 or 5V according to the module, and all grounds must be common.
+两块 TB6612 的 `STBY` 都接 `PB2`。`VM` 接电机电源，逻辑电源按模块要求接 `3V3` 或 `5V`，所有地线共地。
 
-### Hall Encoder Inputs
+### 霍尔编码器
 
-| Wheel | A Phase | B Phase | Implementation |
+| 轮子 | A 相 | B 相 | 实现方式 |
 | --- | --- | --- | --- |
-| Front-left | PA0 | PA1 | TIM2 encoder mode |
-| Front-right | PA6 | PA7 | TIM3 encoder mode |
-| Rear-left | PB6 | PB7 | TIM4 encoder mode |
-| Rear-right | PA4 | PA5 | EXTI software quadrature count |
+| 前左轮 | `PA0` | `PA1` | `TIM2` 编码器模式 |
+| 前右轮 | `PA6` | `PA7` | `TIM3` 编码器模式 |
+| 后左轮 | `PB6` | `PB7` | `TIM4` 编码器模式 |
+| 后右轮 | `PA4` | `PA5` | `EXTI` 软件正交解码 |
 
-If encoder outputs are powered from 5V, confirm that the output level is safe for STM32 GPIO. Use open-drain pull-up to 3V3 or level shifting when needed.
+第四路编码器不使用硬件定时器的原因是 `TIM1` 已经用于 `PA8-PA11` 四路硬件 PWM。若把 `TIM1` 改成第四路硬件编码器，就必须牺牲当前稳定的四路 20kHz PWM，改用软件 PWM 或外接 PWM 芯片。
 
-## Firmware Architecture
+## 固件架构
 
-The project uses bare-metal STM32F10x register access instead of SPL or HAL, so it can build in Keil without downloading a firmware library. CMSIS-style device definitions live in local headers. Startup code, system clock setup, drivers, control code, and application logic are split into small modules.
+工程使用裸机寄存器方式，不依赖 HAL 或标准外设库。这样 Keil 安装好后可以直接编译，不需要额外下载 STM32 固件库。
 
-The main loop reads PS2 input, converts joystick commands into chassis velocity commands, computes four wheel speed targets with mecanum kinematics, then runs wheel speed PID at a 10 ms cadence. TIM1 provides four hardware PWM channels. TIM2, TIM3, and TIM4 count three encoders in hardware, and EXTI for PA4/PA5 counts the fourth encoder in software.
+代码按职责拆分：
 
-## Control Behavior
+- `Core/`：系统时钟、主循环、配置参数、最小寄存器定义。
+- `Drivers/`：GPIO、PWM、TB6612、编码器、PS2、SysTick。
+- `App/`：PID、麦轮运动学、整车控制逻辑。
+- `Startup/`：启动文件和中断向量表。
+- `docs/`：接线说明和设计记录。
+- `tests/`：可在电脑上运行的核心算法测试。
 
-The PS2 left joystick controls X/Y translation. The right joystick X axis controls rotation. Without a gyroscope, rotation is relative to robot heading only and cannot hold absolute yaw. Button handling includes stop/enable behavior and speed scaling constants that can be tuned in `config.h`.
+## 控制流程
 
-Wheel speed PID computes signed PWM commands from target encoder ticks per control cycle and measured ticks per cycle. TB6612 direction pins carry the sign, and TIM1 duty carries the magnitude.
+主循环每 10ms 执行一次控制：
 
-## Project Outputs
+1. 读取 PS2 手柄。
+2. 将摇杆值转换为前后、左右、自转三个速度命令。
+3. 使用麦轮运动学计算四个轮子的目标速度。
+4. 读取四个编码器在当前周期内的计数增量。
+5. 四个轮子分别运行 PID。
+6. 将 PID 输出转换为 TB6612 方向引脚和 TIM1 PWM 占空比。
 
-The repository will contain:
+`START` 用于使能电机，`SELECT` 用于停车，`L1` 用于慢速模式。
 
-- `MecanumCar.uvprojx` and `MecanumCar.uvoptx` for Keil.
-- `Core/`, `Drivers/`, `App/`, and `Startup/` firmware sources.
-- `docs/wiring.md` with the pin map and wiring notes.
-- `tests/` host-side tests for mecanum kinematics and PID behavior.
+## 验证方式
 
-## Verification
+电脑端验证：
 
-Host-side C tests compile with GCC if available and verify core math. Static checks confirm expected project files and key pin macros exist. Final MCU verification still requires opening the project in Keil after installation and flashing the STM32F103C8T6 board.
+- `tests/test_mecanum_pid.c` 验证麦轮混控和 PID 的核心行为。
+- `tools/verify_project.ps1` 检查工程文件、关键源码和引脚映射是否存在。
+- Keil 工程 XML 可解析。
+- 所有 C 文件可通过主机 GCC 语法检查。
+
+硬件端验证仍需在 Keil 中编译、下载到 STM32F103C8T6，并按 `docs/wiring.md` 的第一次上电检查步骤进行。

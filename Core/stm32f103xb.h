@@ -3,8 +3,15 @@
 
 #include <stdint.h>
 
+/*
+ * 这是本工程自带的 STM32F103C8T6 最小寄存器头文件。
+ * 目的：不依赖 HAL/SPL，Keil 安装好后即可打开工程编译。
+ * 只定义本工程用到的外设和位，不追求覆盖整颗芯片。
+ */
+
 #define __IO volatile
 
+/* RCC 时钟控制寄存器。 */
 typedef struct {
     __IO uint32_t CR;
     __IO uint32_t CFGR;
@@ -18,6 +25,7 @@ typedef struct {
     __IO uint32_t CSR;
 } RCC_TypeDef;
 
+/* STM32F1 GPIO 寄存器：CRL/CRH 决定每个引脚模式。 */
 typedef struct {
     __IO uint32_t CRL;
     __IO uint32_t CRH;
@@ -28,6 +36,7 @@ typedef struct {
     __IO uint32_t LCKR;
 } GPIO_TypeDef;
 
+/* AFIO 用于 EXTI 端口映射和调试口/复用功能配置。 */
 typedef struct {
     __IO uint32_t EVCR;
     __IO uint32_t MAPR;
@@ -35,6 +44,7 @@ typedef struct {
     __IO uint32_t MAPR2;
 } AFIO_TypeDef;
 
+/* EXTI 外部中断，用于 PA4/PA5 软件编码器。 */
 typedef struct {
     __IO uint32_t IMR;
     __IO uint32_t EMR;
@@ -44,6 +54,7 @@ typedef struct {
     __IO uint32_t PR;
 } EXTI_TypeDef;
 
+/* TIM1-TIM4 共用的基础寄存器布局，本工程使用 PWM 和编码器模式。 */
 typedef struct {
     __IO uint32_t CR1;
     __IO uint32_t CR2;
@@ -67,6 +78,7 @@ typedef struct {
     __IO uint32_t DMAR;
 } TIM_TypeDef;
 
+/* 外设基地址，来自 STM32F103 参考手册存储器映射。 */
 #define PERIPH_BASE               0x40000000UL
 #define APB1PERIPH_BASE           PERIPH_BASE
 #define APB2PERIPH_BASE           (PERIPH_BASE + 0x10000UL)
@@ -101,6 +113,7 @@ typedef struct {
 #define NVIC_ISER0                (*((__IO uint32_t *)0xE000E100UL))
 #define NVIC_ISER1                (*((__IO uint32_t *)0xE000E104UL))
 
+/* RCC 位定义。 */
 #define RCC_CR_HSEON              (1UL << 16)
 #define RCC_CR_HSERDY             (1UL << 17)
 #define RCC_CR_PLLON              (1UL << 24)
@@ -122,6 +135,7 @@ typedef struct {
 #define RCC_APB1ENR_TIM3EN        (1UL << 1)
 #define RCC_APB1ENR_TIM4EN        (1UL << 2)
 
+/* GPIO MODE/CNF 组合值，供 gpio_config() 使用。 */
 #define GPIO_MODE_INPUT           0x0U
 #define GPIO_MODE_OUTPUT_2MHZ     0x2U
 #define GPIO_MODE_OUTPUT_50MHZ    0x3U
@@ -132,6 +146,7 @@ typedef struct {
 #define GPIO_CNF_OUT_OD           0x1U
 #define GPIO_CNF_AF_PP            0x2U
 
+/* TIM 常用控制位。 */
 #define TIM_CR1_CEN               (1UL << 0)
 #define TIM_CR1_ARPE              (1UL << 7)
 #define TIM_EGR_UG                (1UL << 0)
@@ -144,6 +159,7 @@ typedef struct {
 #define EXTI4_IRQn                10
 #define EXTI9_5_IRQn              23
 
+/* 启动文件和系统时钟文件使用的 CMSIS 风格接口。 */
 void SystemInit(void);
 extern uint32_t SystemCoreClock;
 

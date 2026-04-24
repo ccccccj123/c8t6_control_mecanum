@@ -1,50 +1,116 @@
-# STM32F103C8T6 Mecanum Car Wiring
+# STM32F103C8T6 麦轮小车接线说明
 
-## Board Pins
+## 开发板引脚
 
-This project assumes the minimum system board exposes PB0-PB15, PA0-PA12, PA15, PC13-PC15, 5V, two 3V3 pins, three GND pins, VB, and R. Keep PA13 and PA14 free for ST-Link SWDIO/SWCLK.
+本工程按你提供的 STM32F103C8T6 最小系统板引脚来设计。可用引脚包括：
 
-## PS2 Receiver
+- `PA0-PA12`
+- `PA15`
+- `PB0-PB15`
+- `PC13-PC15`
+- `5V`
+- 两个 `3V3`
+- 三个 `GND`
+- `VB`
+- `R`
 
-| PS2 Signal | STM32 Pin |
-| --- | --- |
-| ATT / CS | PB12 |
-| CLK | PB13 |
-| DAT | PB14 |
-| CMD | PB15 |
-| VCC | 3V3 |
-| GND | GND |
+`PA13` 和 `PA14` 保留给 ST-Link 下载调试，也就是 `SWDIO` 和 `SWCLK`。不建议把它们接到电机驱动、编码器或 PS2 接收器上，否则后续下载程序会很难受。
 
-## TB6612 Motor Drivers
+## PS2 接收器
 
-Use two TB6612 modules. Connect both STBY pins to PB2.
+| PS2 信号 | STM32 引脚 | 说明 |
+| --- | --- | --- |
+| `ATT` / `CS` | `PB12` | 片选信号，由 STM32 拉低开始通信 |
+| `CLK` | `PB13` | 时钟信号，由 STM32 输出 |
+| `DAT` | `PB14` | 数据输入，PS2 接收器输出到 STM32 |
+| `CMD` | `PB15` | 命令输出，STM32 输出到 PS2 接收器 |
+| `VCC` | `3V3` | 建议接 3.3V，避免 IO 电平风险 |
+| `GND` | `GND` | 必须与 STM32 和电机电源共地 |
 
-| Wheel | PWM | IN1 | IN2 | Driver Channel |
+PS2 通信使用 GPIO 位模拟，不占用硬件 SPI。这样布线简单，也避免和编码器/PWM 定时器抢资源。
+
+## TB6612 电机驱动
+
+本工程使用两块 TB6612，每块驱动两个电机。两块 TB6612 的 `STBY` 都接到 `PB2`，软件可以统一使能或急停。
+
+| 轮子 | PWM | IN1 | IN2 | TB6612 通道 |
 | --- | --- | --- | --- | --- |
-| Front-left | PA8 | PB0 | PB1 | TB6612 #1 A |
-| Front-right | PA9 | PB10 | PB11 | TB6612 #1 B |
-| Rear-left | PA10 | PA12 | PA15 | TB6612 #2 A |
-| Rear-right | PA11 | PC13 | PC14 | TB6612 #2 B |
+| 前左轮 `FL` | `PA8` | `PB0` | `PB1` | 第 1 块 A 通道 |
+| 前右轮 `FR` | `PA9` | `PB10` | `PB11` | 第 1 块 B 通道 |
+| 后左轮 `RL` | `PA10` | `PA12` | `PA15` | 第 2 块 A 通道 |
+| 后右轮 `RR` | `PA11` | `PC13` | `PC14` | 第 2 块 B 通道 |
 
-TB6612 `VM` connects to the motor battery positive or board `VB` if that pin is your battery input. TB6612 `VCC` connects to 3V3 or 5V according to the exact module. All grounds must be common: STM32 GND, PS2 GND, TB6612 GND, battery negative, and encoder GND.
+供电连接：
 
-## Hall 370 Motor Encoders
+- TB6612 的 `VM` 接电机电源正极。如果你的最小系统板 `VB` 就是电池输入，可以按实际板子电源设计接 `VB`。
+- TB6612 的 `VCC` 接逻辑电源。多数模块 3.3V/5V 都能识别，但建议优先按模块说明接。
+- STM32、PS2、TB6612、电池负极、编码器地线必须共地。
 
-| Wheel | Encoder A | Encoder B | Firmware Mode |
+## 霍尔 370 电机编码器
+
+| 轮子 | 编码器 A 相 | 编码器 B 相 | 固件实现 |
 | --- | --- | --- | --- |
-| Front-left | PA0 | PA1 | TIM2 encoder mode |
-| Front-right | PA6 | PA7 | TIM3 encoder mode |
-| Rear-left | PB6 | PB7 | TIM4 encoder mode |
-| Rear-right | PA4 | PA5 | EXTI software quadrature |
+| 前左轮 `FL` | `PA0` | `PA1` | `TIM2` 硬件编码器模式 |
+| 前右轮 `FR` | `PA6` | `PA7` | `TIM3` 硬件编码器模式 |
+| 后左轮 `RL` | `PB6` | `PB7` | `TIM4` 硬件编码器模式 |
+| 后右轮 `RR` | `PA4` | `PA5` | `EXTI` 软件正交解码 |
 
-If the encoder board is powered from 5V, verify its signal outputs are safe for STM32 input. Prefer open-drain outputs pulled up to 3V3, a level shifter, or a resistor divider when the output is push-pull 5V.
+如果编码器板用 5V 供电，请确认 A/B 相输出是否能安全接入 STM32。比较稳的做法是：
 
-## Controls
+- 编码器输出为开漏/集电极时，用 3.3V 上拉；
+- 编码器输出为 5V 推挽时，加电平转换或分压；
+- 编码器线尽量短，电机线和编码器线分开走线。
 
-- Press `START` on the PS2 controller to enable motor output.
-- Press `SELECT` to stop motor output.
-- Left joystick controls translation.
-- Right joystick X axis controls rotation.
-- Hold `L1` for slow mode.
+## 为什么第四路编码器不用硬件编码器
 
-No gyroscope is used, so the car cannot hold absolute heading. Rotation is commanded by wheel speed only.
+STM32F103C8T6 可用于编码器模式的主要定时器是 `TIM1`、`TIM2`、`TIM3`、`TIM4`。
+
+当前工程的资源分配是：
+
+| 定时器 | 用途 |
+| --- | --- |
+| `TIM1` | `PA8-PA11` 四路 20kHz 硬件 PWM，控制四个 TB6612 PWM 输入 |
+| `TIM2` | 前左轮硬件编码器 |
+| `TIM3` | 前右轮硬件编码器 |
+| `TIM4` | 后左轮硬件编码器 |
+
+如果坚持把后右轮也改成硬件编码器，可以把 `TIM1` 改成编码器模式，例如使用 `PA8/PA9`。但这样 `TIM1` 就不能再同时输出四路电机 PWM。你就需要在下面几种方案中再做选择：
+
+| 方案 | 优点 | 缺点 |
+| --- | --- | --- |
+| 继续当前方案：三路硬件编码器 + 一路 EXTI | 保留四路稳定 20kHz 硬件 PWM；代码和硬件都比较简单 | 第四路编码器由中断软件计数 |
+| 四路硬件编码器 + 软件 PWM | 四个编码器都由硬件计数 | 软件 PWM 抖动更大，占 CPU，频率不宜太高 |
+| 四路硬件编码器 + 外接 PWM 芯片 | 编码器和 PWM 都比较理想 | 需要额外模块和接线，代码也要增加通信驱动 |
+| 换更大 STM32，比如 F103RCT6/F407 | 定时器资源更充足 | 需要换板子 |
+
+对这台 TB6612 + 370 电机麦轮小车来说，我推荐当前方案。一路 EXTI 软件解码通常够用，而四路硬件 PWM 对电机控制更重要。
+
+## 手柄控制
+
+- 按 `START`：使能电机输出。
+- 按 `SELECT`：停止电机输出。
+- 左摇杆：控制前后/左右平移。
+- 右摇杆 X 轴：控制自转。
+- 按住 `L1`：慢速模式，适合第一次调试。
+
+本车没有陀螺仪，因此不能保持绝对航向。也就是说，小车旋转后，手柄“前进”永远是沿车头方向前进，而不是沿场地固定方向前进。
+
+## 第一次上电检查
+
+1. 先把车架垫起来，让四个轮子离地。
+2. 只给 STM32 和 PS2 接收器供电，确认 Keil 还能通过 `PA13/PA14` 下载程序。
+3. 接 TB6612 逻辑电源和电机电源，确认所有 `GND` 已经共地。
+4. 按住 `L1`，再按 `START`，轻推摇杆，观察四个轮子方向。
+5. 如果某个轮子电机方向反了，优先对调这个电机的两根输出线。
+6. 如果对调电机线后速度闭环抖动或越跑越猛，再对调这个轮子的编码器 A/B 相。
+7. 四个轮子方向都正确后，再调 `Core/config.h` 里的 `SPEED_LIMIT_TICKS`、`PID_KP`、`PID_KI`。
+
+## PID 调试建议
+
+先把车架离地调试，确认方向没错后再下地。
+
+1. 先把 `PID_KI` 和 `PID_KD` 设为 0，只调 `PID_KP`。
+2. 慢慢增大 `PID_KP`，直到轮速跟随明显，但不持续来回抖。
+3. 加一点 `PID_KI`，改善低速时因为摩擦造成的转不动或速度偏低。
+4. `PID_KD` 默认保持 0。霍尔编码器计数本身会有颗粒感，微分项容易放大噪声。
+5. 如果小车一使能就冲得太猛，先降低 `SPEED_LIMIT_TICKS` 和 `PID_KP`。

@@ -1,10 +1,17 @@
 #include <assert.h>
 #include <stdio.h>
 
+/*
+ * 这个测试文件在电脑上运行，不依赖 STM32 硬件。
+ * 作用是保护最核心的算法：麦轮混控符号、限幅比例、PID 限幅和积分复位。
+ * 如果以后改了 App/mecanum.c 或 App/pid.c，先跑这个测试确认基础行为没坏。
+ */
+
 #include "App/mecanum.h"
 #include "App/pid.h"
 
 static void test_forward_sets_all_wheels_positive(void) {
+    /* 前进时四个轮子都应该同向。 */
     WheelSpeeds w = mecanum_mix(0, 500, 0, 1000);
     assert(w.front_left == 500);
     assert(w.front_right == 500);
@@ -13,6 +20,7 @@ static void test_forward_sets_all_wheels_positive(void) {
 }
 
 static void test_strafe_right_uses_mecanum_sign_pattern(void) {
+    /* 右平移时麦轮呈 + - - + 的典型符号模式。 */
     WheelSpeeds w = mecanum_mix(400, 0, 0, 1000);
     assert(w.front_left == 400);
     assert(w.front_right == -400);
@@ -21,6 +29,7 @@ static void test_strafe_right_uses_mecanum_sign_pattern(void) {
 }
 
 static void test_clockwise_rotation_uses_opposite_sides(void) {
+    /* 顺时针自转时左右两侧轮子方向相反。 */
     WheelSpeeds w = mecanum_mix(0, 0, 300, 1000);
     assert(w.front_left == 300);
     assert(w.front_right == -300);
@@ -29,6 +38,7 @@ static void test_clockwise_rotation_uses_opposite_sides(void) {
 }
 
 static void test_mix_scales_to_limit_without_changing_ratio(void) {
+    /* 多轴叠加超过限幅时，应等比例缩放，而不是单个轮子硬截断。 */
     WheelSpeeds w = mecanum_mix(800, 800, 800, 1000);
     assert(w.front_left == 1000);
     assert(w.front_right == -333);
@@ -37,12 +47,14 @@ static void test_mix_scales_to_limit_without_changing_ratio(void) {
 }
 
 static void test_pid_clamps_output(void) {
+    /* 大误差时 PID 输出不能超过 PWM 量程。 */
     PIDController pid;
     pid_init(&pid, 200, 0, 0, 600, 1000);
     assert(pid_update(&pid, 10, 0) == 600);
 }
 
 static void test_pid_integral_accumulates_and_resets(void) {
+    /* 积分项应能累积、限幅，并在停车/重新使能时清零。 */
     PIDController pid;
     pid_init(&pid, 0, 100, 0, 1000, 5);
     assert(pid_update(&pid, 3, 0) == 300);

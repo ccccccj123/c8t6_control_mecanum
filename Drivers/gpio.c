@@ -6,6 +6,10 @@ void gpio_clock_enable(void) {
 }
 
 void gpio_config(GPIO_TypeDef *port, uint8_t pin, uint8_t mode, uint8_t cnf) {
+    /*
+     * STM32F1 每个 GPIO 引脚用 4bit 配置。
+     * pin 0-7 在 CRL，pin 8-15 在 CRH。
+     */
     uint32_t shift = (uint32_t)(pin & 0x7U) * 4U;
     uint32_t value = ((uint32_t)cnf << 2) | mode;
     __IO uint32_t *reg = (pin < 8U) ? &port->CRL : &port->CRH;

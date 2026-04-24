@@ -10,6 +10,7 @@
 #define PS2_CMD_PORT GPIOB
 #define PS2_CMD_PIN  15
 
+/* 简单短延时，用于 PS2 位时序。Keil 优化等级改变后如通信不稳，可适当加大循环值。 */
 static void ps2_delay(void) {
     for (volatile uint16_t i = 0; i < 80U; i++) {
     }
@@ -18,6 +19,7 @@ static void ps2_delay(void) {
 static uint8_t ps2_transfer(uint8_t out) {
     uint8_t in = 0U;
     for (uint8_t i = 0; i < 8U; i++) {
+        /* PS2 协议低位先传，CMD 在 CLK 拉低前准备好。 */
         gpio_write(PS2_CMD_PORT, PS2_CMD_PIN, (uint8_t)(out & 0x1U));
         gpio_write(PS2_CLK_PORT, PS2_CLK_PIN, 0U);
         ps2_delay();
@@ -45,6 +47,10 @@ void ps2_init(void) {
 uint8_t ps2_read(PS2State *state) {
     uint8_t data[9];
 
+    /*
+     * 标准 PS2 轮询命令：
+     * 0x01 起始，0x42 请求数据，后续 0x00 用于时钟换回手柄数据。
+     */
     gpio_write(PS2_ATT_PORT, PS2_ATT_PIN, 0U);
     ps2_delay();
     data[0] = ps2_transfer(0x01U);
@@ -55,7 +61,10 @@ uint8_t ps2_read(PS2State *state) {
     }
     gpio_write(PS2_ATT_PORT, PS2_ATT_PIN, 1U);
 
+    /* 0x41/0x73/0x79 是常见数字/模拟/压力模式 ID。 */
     state->connected = (data[1] == 0x41U || data[1] == 0x73U || data[1] == 0x79U);
+
+    /* PS2 按键原始数据是低有效，这里取反后统一成 1=按下。 */
     state->buttons = (uint16_t)(~((uint16_t)data[4] << 8 | data[3]));
     state->rx = data[5];
     state->ry = data[6];

@@ -7,11 +7,13 @@
                 IMPORT  SystemInit
                 IMPORT  main
 
+; 栈大小 1KB。当前工程没有 RTOS 和大数组，足够启动与控制循环使用。
 Stack_Size      EQU     0x00000400
                 AREA    STACK, NOINIT, READWRITE, ALIGN=3
 Stack_Mem       SPACE   Stack_Size
 __initial_sp
 
+; 中断向量表。只显式放入本工程使用的 SysTick、EXTI4、EXTI9_5。
                 AREA    RESET, DATA, READONLY
 __Vectors
                 DCD     __initial_sp
@@ -42,6 +44,7 @@ __Vectors
 
 Reset_Handler   PROC
                 EXPORT  Reset_Handler
+; 上电后先配置系统时钟，再进入 C 语言 main()。
                 BL      SystemInit
                 BL      main
                 B       .

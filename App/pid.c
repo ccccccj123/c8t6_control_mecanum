@@ -1,5 +1,6 @@
 #include "pid.h"
 
+/* PID 输出限幅，避免返回值超过 TB6612 PWM 量程。 */
 static int16_t clamp_i16(int32_t value, int16_t limit) {
     if (value > limit) {
         return limit;
@@ -26,9 +27,14 @@ void pid_reset(PIDController *pid) {
 }
 
 int16_t pid_update(PIDController *pid, int16_t target, int16_t measured) {
+    /*
+     * target 和 measured 都是“每 10ms 编码器计数增量”。
+     * 这样可以少做浮点和 RPM 换算，方便在 C8T6 上保持简单可靠。
+     */
     int16_t error = (int16_t)(target - measured);
     int16_t derivative = (int16_t)(error - pid->previous_error);
 
+    /* 积分限幅用于防止长时间卡住或目标过高时出现积分饱和。 */
     pid->integral += error;
     if (pid->integral > pid->integral_limit) {
         pid->integral = pid->integral_limit;
@@ -38,6 +44,7 @@ int16_t pid_update(PIDController *pid, int16_t target, int16_t measured) {
 
     pid->previous_error = error;
 
+    /* 整数 PID：参数越大反应越猛。初调时建议先调 KP，再少量加 KI。 */
     int32_t output = (int32_t)pid->kp * error;
     output += (int32_t)pid->ki * pid->integral;
     output += (int32_t)pid->kd * derivative;
