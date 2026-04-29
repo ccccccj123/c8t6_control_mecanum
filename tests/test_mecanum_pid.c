@@ -9,6 +9,7 @@
 
 #include "App/mecanum.h"
 #include "App/pid.h"
+#include "Drivers/ps2.h"
 
 static void test_forward_sets_all_wheels_positive(void) {
     /* 前进时四个轮子都应该同向。 */
@@ -63,6 +64,42 @@ static void test_pid_integral_accumulates_and_resets(void) {
     assert(pid_update(&pid, 3, 0) == 300);
 }
 
+static void test_digital_ps2_mode_forces_sticks_to_neutral(void) {
+    /*
+     * 数字模式(0x41)下没有可靠的模拟摇杆数据。
+     * 为了避免按 START 后因为垃圾值导致电机自己转，代码应强制回中。
+     */
+    PS2State state = {
+        .connected = 1U,
+        .mode = PS2_MODE_DIGITAL,
+        .buttons = 0U,
+        .rx = 0U,
+        .ry = 255U,
+        .lx = 1U,
+        .ly = 254U
+    };
+
+    ps2_sanitize_axes(&state);
+
+    assert(ps2_has_analog_sticks(&state) == 0U);
+    assert(state.rx == PS2_STICK_NEUTRAL);
+    assert(state.ry == PS2_STICK_NEUTRAL);
+    assert(state.lx == PS2_STICK_NEUTRAL);
+    assert(state.ly == PS2_STICK_NEUTRAL);
+}
+
+static void test_ps2_mode_reconfigure_rule_matches_expected_modes(void) {
+    PS2State disconnected = {0};
+    PS2State digital = {.connected = 1U, .mode = PS2_MODE_DIGITAL};
+    PS2State analog = {.connected = 1U, .mode = PS2_MODE_ANALOG_RED};
+    PS2State pressure = {.connected = 1U, .mode = PS2_MODE_ANALOG_PRESSURE};
+
+    assert(ps2_should_enable_analog_mode(&disconnected) == 1U);
+    assert(ps2_should_enable_analog_mode(&digital) == 1U);
+    assert(ps2_should_enable_analog_mode(&analog) == 0U);
+    assert(ps2_should_enable_analog_mode(&pressure) == 0U);
+}
+
 int main(void) {
     test_forward_sets_all_wheels_positive();
     test_strafe_right_uses_mecanum_sign_pattern();
@@ -70,6 +107,8 @@ int main(void) {
     test_mix_scales_to_limit_without_changing_ratio();
     test_pid_clamps_output();
     test_pid_integral_accumulates_and_resets();
+    test_digital_ps2_mode_forces_sticks_to_neutral();
+    test_ps2_mode_reconfigure_rule_matches_expected_modes();
     puts("All host tests passed");
     return 0;
 }

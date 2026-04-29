@@ -1,5 +1,6 @@
 #include "ps2.h"
 #include "gpio.h"
+#include "systick.h"
 
 #define PS2_ATT_PORT GPIOB
 #define PS2_ATT_PIN  12
@@ -14,6 +15,10 @@
 static void ps2_delay(void) {
     for (volatile uint16_t i = 0; i < 80U; i++) {
     }
+}
+
+static void ps2_frame_delay(void) {
+    delay_ms(1U);
 }
 
 static uint8_t ps2_transfer(uint8_t out) {
@@ -33,6 +38,52 @@ static uint8_t ps2_transfer(uint8_t out) {
     return in;
 }
 
+static void ps2_exchange(const uint8_t *tx, uint8_t *rx, uint8_t length) {
+    if (tx == 0 || length == 0U) {
+        return;
+    }
+
+    gpio_write(PS2_ATT_PORT, PS2_ATT_PIN, 0U);
+    ps2_delay();
+    for (uint8_t i = 0U; i < length; i++) {
+        uint8_t in = ps2_transfer(tx[i]);
+        if (rx != 0) {
+            rx[i] = in;
+        }
+    }
+    gpio_write(PS2_ATT_PORT, PS2_ATT_PIN, 1U);
+    ps2_frame_delay();
+}
+
+static void ps2_send_config(const uint8_t *tx, uint8_t length) {
+    ps2_exchange(tx, 0, length);
+}
+
+static void ps2_try_enable_analog_mode(void) {
+    static const uint8_t short_poll[] = {0x01U, 0x42U, 0x00U, 0x00U, 0x00U};
+    static const uint8_t enter_config[] = {0x01U, 0x43U, 0x00U, 0x01U, 0x00U,
+                                           0x00U, 0x00U, 0x00U, 0x00U};
+    static const uint8_t enable_analog[] = {0x01U, 0x44U, 0x00U, 0x01U, 0x03U,
+                                            0x00U, 0x00U, 0x00U, 0x00U};
+    static const uint8_t exit_config[] = {0x01U, 0x43U, 0x00U, 0x00U, 0x5AU,
+                                          0x5AU, 0x5AU, 0x5AU, 0x5AU};
+    PS2State state;
+
+    for (uint8_t attempt = 0U; attempt < 3U; attempt++) {
+        if (ps2_read(&state) != 0U && ps2_should_enable_analog_mode(&state) == 0U) {
+            return;
+        }
+
+        ps2_send_config(short_poll, sizeof(short_poll));
+        ps2_send_config(short_poll, sizeof(short_poll));
+        ps2_send_config(short_poll, sizeof(short_poll));
+        ps2_send_config(enter_config, sizeof(enter_config));
+        ps2_send_config(enable_analog, sizeof(enable_analog));
+        ps2_send_config(exit_config, sizeof(exit_config));
+        delay_ms(10U);
+    }
+}
+
 void ps2_init(void) {
     gpio_config(PS2_ATT_PORT, PS2_ATT_PIN, GPIO_MODE_OUTPUT_2MHZ, GPIO_CNF_OUT_PP);
     gpio_config(PS2_CLK_PORT, PS2_CLK_PIN, GPIO_MODE_OUTPUT_2MHZ, GPIO_CNF_OUT_PP);
@@ -42,27 +93,27 @@ void ps2_init(void) {
     gpio_write(PS2_ATT_PORT, PS2_ATT_PIN, 1U);
     gpio_write(PS2_CLK_PORT, PS2_CLK_PIN, 1U);
     gpio_write(PS2_CMD_PORT, PS2_CMD_PIN, 1U);
+    delay_ms(20U);
+    ps2_try_enable_analog_mode();
 }
 
 uint8_t ps2_read(PS2State *state) {
+    static const uint8_t poll[] = {0x01U, 0x42U, 0x00U, 0x00U, 0x00U,
+                                   0x00U, 0x00U, 0x00U, 0x00U};
     uint8_t data[9];
 
     /*
      * 标准 PS2 轮询命令：
      * 0x01 起始，0x42 请求数据，后续 0x00 用于时钟换回手柄数据。
      */
-    gpio_write(PS2_ATT_PORT, PS2_ATT_PIN, 0U);
-    ps2_delay();
-    data[0] = ps2_transfer(0x01U);
-    data[1] = ps2_transfer(0x42U);
-    data[2] = ps2_transfer(0x00U);
-    for (uint8_t i = 3U; i < 9U; i++) {
-        data[i] = ps2_transfer(0x00U);
-    }
-    gpio_write(PS2_ATT_PORT, PS2_ATT_PIN, 1U);
+    ps2_exchange(poll, data, sizeof(data));
 
+    /* 记录当前模式字节，供上层区分数字模式和模拟模式。 */
+    state->mode = data[1];
     /* 0x41/0x73/0x79 是常见数字/模拟/压力模式 ID。 */
-    state->connected = (data[1] == 0x41U || data[1] == 0x73U || data[1] == 0x79U);
+    state->connected = (state->mode == PS2_MODE_DIGITAL ||
+                        state->mode == PS2_MODE_ANALOG_RED ||
+                        state->mode == PS2_MODE_ANALOG_PRESSURE);
 
     /* PS2 按键原始数据是低有效，这里取反后统一成 1=按下。 */
     state->buttons = (uint16_t)(~((uint16_t)data[4] << 8 | data[3]));
@@ -70,6 +121,11 @@ uint8_t ps2_read(PS2State *state) {
     state->ry = data[6];
     state->lx = data[7];
     state->ly = data[8];
+    /*
+     * 数字模式没有可靠摇杆数据。
+     * 为避免 START 使能后用到非中位垃圾值，这里统一把摇杆钳回中位。
+     */
+    ps2_sanitize_axes(state);
     return state->connected;
 }
 

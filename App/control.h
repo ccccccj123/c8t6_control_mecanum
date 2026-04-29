@@ -5,7 +5,12 @@
 
 typedef struct {
     uint8_t ps2_connected;
+    uint8_t ps2_mode;
     uint8_t motor_enabled;
+    uint8_t ps2_lx;
+    uint8_t ps2_ly;
+    uint8_t ps2_rx;
+    uint8_t ps2_ry;
     int16_t target[4];
     int16_t measured[4];
     int16_t output[4];

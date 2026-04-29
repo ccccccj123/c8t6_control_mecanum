@@ -38,6 +38,35 @@ static void oled_write_int_width(int16_t value, uint8_t width) {
     }
 }
 
+static void oled_write_hex_byte(uint8_t value) {
+    static const char hex[] = "0123456789ABCDEF";
+    oled_write_char(hex[(value >> 4) & 0x0FU]);
+    oled_write_char(hex[value & 0x0FU]);
+}
+
+static void oled_write_ps2_mode(const ControlStatus *status) {
+    if (status->ps2_connected == 0U) {
+        oled_write_string("WAIT");
+        return;
+    }
+
+    switch (status->ps2_mode) {
+    case PS2_MODE_DIGITAL:
+        oled_write_string("DIG ");
+        break;
+    case PS2_MODE_ANALOG_RED:
+        oled_write_string("ANA ");
+        break;
+    case PS2_MODE_ANALOG_PRESSURE:
+        oled_write_string("79  ");
+        break;
+    default:
+        oled_write_hex_byte(status->ps2_mode);
+        oled_write_string("  ");
+        break;
+    }
+}
+
 static void oled_show_status(void) {
     const ControlStatus *status = control_get_status();
 
@@ -53,25 +82,46 @@ static void oled_show_status(void) {
      * 这里改为“固定位置覆盖显示”：每个字段都写固定宽度，
      * 旧字符会被后面的空格覆盖，屏幕就稳定多了。
      */
-    oled_write_string(status->ps2_connected ? "OK  " : "WAIT");
+    oled_write_ps2_mode(status);
+    if (status->ps2_connected != 0U) {
+        oled_write_char(' ');
+        oled_write_hex_byte(status->ps2_mode);
+    } else {
+        oled_write_string("   ");
+    }
     oled_write_string(" EN:");
     oled_write_int(status->motor_enabled);
-    oled_write_string("    ");
+    oled_write_string("  ");
 
     oled_set_cursor(2U, 0U);
-    oled_write_string("FL:");
-    oled_write_int_width(status->measured[0], 5U);
-    oled_write_string(" FR:");
-    oled_write_int_width(status->measured[1], 5U);
+    oled_write_string("L:");
+    oled_write_int_width(status->ps2_lx, 3U);
+    oled_write_char('-');
+    oled_write_int_width(status->ps2_ly, 3U);
+    oled_write_string(" R:");
+    oled_write_int_width(status->ps2_rx, 3U);
+    oled_write_char('-');
+    oled_write_int_width(status->ps2_ry, 3U);
 
     oled_set_cursor(4U, 0U);
-    oled_write_string("RL:");
-    oled_write_int_width(status->measured[2], 5U);
-    oled_write_string(" RR:");
-    oled_write_int_width(status->measured[3], 5U);
+    oled_write_string("TG:");
+    oled_write_int_width(status->target[0], 3U);
+    oled_write_char('-');
+    oled_write_int_width(status->target[1], 3U);
+    oled_write_char('-');
+    oled_write_int_width(status->target[2], 3U);
+    oled_write_char('-');
+    oled_write_int_width(status->target[3], 3U);
 
     oled_set_cursor(6U, 0U);
-    oled_write_string("START GO SELECT STOP");
+    oled_write_string("M:");
+    oled_write_int_width(status->measured[0], 3U);
+    oled_write_char('-');
+    oled_write_int_width(status->measured[1], 3U);
+    oled_write_char('-');
+    oled_write_int_width(status->measured[2], 3U);
+    oled_write_char('-');
+    oled_write_int_width(status->measured[3], 3U);
 }
 
 int main(void) {

@@ -41,7 +41,12 @@ void control_init(void) {
     }
     enabled = 0U;
     status.ps2_connected = 0U;
+    status.ps2_mode = 0U;
     status.motor_enabled = 0U;
+    status.ps2_lx = PS2_STICK_NEUTRAL;
+    status.ps2_ly = PS2_STICK_NEUTRAL;
+    status.ps2_rx = PS2_STICK_NEUTRAL;
+    status.ps2_ry = PS2_STICK_NEUTRAL;
     clear_status_values();
     encoder_reset();
 }
@@ -57,12 +62,22 @@ void control_update_10ms(void) {
         tb6612_stop_all();
         enabled = 0U;
         status.ps2_connected = 0U;
+        status.ps2_mode = ps2.mode;
         status.motor_enabled = 0U;
+        status.ps2_lx = PS2_STICK_NEUTRAL;
+        status.ps2_ly = PS2_STICK_NEUTRAL;
+        status.ps2_rx = PS2_STICK_NEUTRAL;
+        status.ps2_ry = PS2_STICK_NEUTRAL;
         clear_status_values();
         encoder_reset();
         return;
     }
     status.ps2_connected = 1U;
+    status.ps2_mode = ps2.mode;
+    status.ps2_lx = ps2.lx;
+    status.ps2_ly = ps2.ly;
+    status.ps2_rx = ps2.rx;
+    status.ps2_ry = ps2.ry;
 
     /* START 使能，SELECT 停车；这是调车时的基础安全开关。 */
     if (ps2_button_down(&ps2, PS2_BTN_START) != 0U) {
